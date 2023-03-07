@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { prisma } from '../libs/prisma'
-import { checkTaskIdExist } from '../utils/check-task-id-exist'
+import { checkTaskIdExist } from '../middlewares/check-task-id-exist'
 
 export async function tasksRoutes(app: FastifyInstance) {
   const taskIdParams = z.object({
@@ -42,6 +42,8 @@ export async function tasksRoutes(app: FastifyInstance) {
         description,
       },
     })
+
+    reply.status(201)
   })
 
   app.get('/task', async (req, reply) => {

@@ -1,21 +1,41 @@
 import { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { prisma } from '../libs/prisma'
+import { checkTaskIdExist } from '../utils/check-task-id-exist'
 
 export async function tasksRoutes(app: FastifyInstance) {
-  const tasksFormSchema = z.object({
-    title: z.string(),
-    description: z.string(),
+  const taskIdParams = z.object({
+    id: z.string().uuid(),
   })
 
-  app.post('/task', async (req) => {
+  app.post('/task', async (req, reply) => {
+    const tasksFormSchema = z.object({
+      title: z.string({ required_error: 'Title cannot is nullable' }).min(3),
+      description: z.string({
+        required_error: 'Description cannot is nullable',
+      }),
+    })
+
     if (req.method !== 'POST') {
-      return 'Method invalid'
+      return reply.status(405)
     }
 
     const task = tasksFormSchema.parse(req.body)
 
     const { title, description } = task
+
+    const isTaskExist = await prisma.tasks.findFirst({
+      where: {
+        title,
+      },
+    })
+
+    if (isTaskExist) {
+      return reply.status(409).send({
+        message: 'Task already exist',
+      })
+    }
+
     await prisma.tasks.create({
       data: {
         title,
@@ -26,7 +46,7 @@ export async function tasksRoutes(app: FastifyInstance) {
 
   app.get('/task', async (req, reply) => {
     if (req.method !== 'GET') {
-      return 'Method Invalid'
+      return reply.status(405)
     }
 
     const tasks = await prisma.tasks.findMany()
@@ -36,17 +56,25 @@ export async function tasksRoutes(app: FastifyInstance) {
     })
   })
 
-  app.put('/task/:id', async (req) => {
+  app.put('/task/:id', async (req, reply) => {
     const updateTaskFormSchema = z.object({
-      title: z.string(),
+      title: z.string().min(3),
     })
 
     if (req.method !== 'PUT') {
-      return 'Method Invalid'
+      return reply.status(405)
     }
 
-    const { id } = req.params
+    const { id } = taskIdParams.parse(req.params)
     const { title } = updateTaskFormSchema.parse(req.body)
+
+    const isTaskExist = await checkTaskIdExist(id)
+
+    if (!isTaskExist) {
+      return reply.status(404).send({
+        message: 'There is no task with that id',
+      })
+    }
 
     await prisma.tasks.update({
       where: {
@@ -59,12 +87,20 @@ export async function tasksRoutes(app: FastifyInstance) {
     })
   })
 
-  app.delete('/task/:id', async (req) => {
+  app.delete('/task/:id', async (req, reply) => {
     if (req.method !== 'DELETE') {
-      return 'Method Invalid'
+      return reply.status(405)
     }
 
-    const { id } = req.params
+    const { id } = taskIdParams.parse(req.params)
+
+    const isTaskExist = await checkTaskIdExist(id)
+
+    if (!isTaskExist) {
+      return reply.status(404).send({
+        message: 'There is no task with that id',
+      })
+    }
 
     await prisma.tasks.delete({
       where: {
@@ -73,12 +109,20 @@ export async function tasksRoutes(app: FastifyInstance) {
     })
   })
 
-  app.patch('/task/:id/complete', async (req) => {
+  app.patch('/task/:id/complete', async (req, reply) => {
     if (req.method !== 'PATCH') {
-      return 'Method Invalid'
+      return reply.status(405)
     }
 
-    const { id } = req.params
+    const { id } = taskIdParams.parse(req.params)
+
+    const isTaskExist = await checkTaskIdExist(id)
+
+    if (!isTaskExist) {
+      return reply.status(404).send({
+        message: 'There is no task with that id',
+      })
+    }
 
     const isTaskCompleted = await prisma.tasks.findUnique({
       where: {
